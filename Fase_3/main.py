@@ -1,23 +1,4 @@
-# app.py
-# ============================================================
-# Dashboard Proyecto 2 - Data Science (Carcasa)
-#
-# Parte 1: Diseño y Desarrollo de la Aplicación (40 puntos)
-#
-# - Usa los datasets: trainlimpio.csv y testlimpio.csv
-# - Permite explorar y preprocesar datos de entrada.
-# - Deja secciones, botones y estructuras listas para:
-#     * Conectar los modelos reales (ARIMA, Regresión, LSTM, GRU, TFT, etc.).
-#     * Llenar las métricas con los resultados del proyecto.
-#     * Agregar gráficas específicas: ARIMA vs GRU vs TFT, por target.
-#
-# NOTA:
-#   Por ahora esta app es una CARCASA. No carga modelos reales todavía.
-#   La Parte 2 (Integración de Modelos en la Aplicación) debe:
-#     - Cargar archivos .pkl / .pt con los modelos entrenados.
-#     - Usar los datos de testlimpio.csv para generar predicciones.
-#     - Completar las tablas de métricas y las gráficas comparativas.
-# ============================================================
+
 
 import streamlit as st
 import pandas as pd
@@ -25,18 +6,14 @@ import numpy as np
 import altair as alt
 import os
 
-# -----------------------------
-# Configuración general de la página
-# -----------------------------
+
 st.set_page_config(
     page_title="Proyecto 2 - Dashboard JPX",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# -----------------------------
-# Constantes del proyecto
-# -----------------------------
+
 TARGETS = [
     "JPX_Gold_Standard_Futures_Close",
     "JPX_Gold_Standard_Futures_High",
@@ -52,16 +29,10 @@ TARGETS = [
 MODEL_NAMES = ["ARIMA", "Regresión Lineal", "LSTM", "GRU", "TFT"]
 
 
-# -----------------------------
-# Funciones auxiliares
-# -----------------------------
+
 @st.cache_data
 def load_train_test():
-    """
-    Carga trainlimpio.csv y testlimpio.csv si existen en el directorio actual.
-    Devuelve:
-      - df_train, df_test (o None si no se encuentran).
-    """
+
     df_train = None
     df_test = None
 
@@ -74,13 +45,7 @@ def load_train_test():
 
 
 def preprocess_data(df, date_col=None):
-    """
-    Preprocesamiento sencillo:
-      - Convierte la columna de fecha a datetime (si se indica).
-      - Ordena por fecha (si aplica).
-      - Rellena NaN numéricos con la mediana.
-    Devuelve el DataFrame procesado y la lista de columnas numéricas.
-    """
+
     df_proc = df.copy()
 
     if date_col is not None and date_col in df_proc.columns:
@@ -96,11 +61,6 @@ def preprocess_data(df, date_col=None):
 
 
 def example_metrics_dataframe():
-    """
-    DataFrame de EJEMPLO para las métricas de modelos.
-    Ahora incluye TODOS los targets para poder filtrar y comparar.
-    En la Parte 2 se reemplaza por métricas reales.
-    """
     base_mae = {
         "ARIMA": 130,
         "Regresión Lineal": 180,
@@ -122,23 +82,17 @@ def example_metrics_dataframe():
             rows.append({
                 "Modelo": modelo,
                 "Target": target,
-                "MAE": base_mae[modelo] + i * 5,   # solo para variar un poco
-                "RMSE": base_rmse[modelo] + i * 8  # placeholder
+                "MAE": base_mae[modelo] + i * 5,    
+                "RMSE": base_rmse[modelo] + i * 8 
             })
     return pd.DataFrame(rows)
 
 @st.cache_data
 def load_feature_importance():
-    """
-    Intenta cargar feature_importance.csv con columnas:
-      Modelo, Target, Feature, Importance
-    Si no existe, genera un ejemplo para la demo.
-    """
     if os.path.exists("feature_importance.csv"):
         df = pd.read_csv("feature_importance.csv")
         return df
 
-    # EJEMPLO (Parte 1): importancia ficticia
     features_demo = [
         "lag_1", "lag_2", "lag_7",
         "rolling_mean_7", "rolling_std_7",
@@ -149,7 +103,7 @@ def load_feature_importance():
         for feat in features_demo:
             rows.append({
                 "Modelo": modelo,
-                "Target": TARGETS[0],   # solo un target de ejemplo
+                "Target": TARGETS[0],   
                 "Feature": feat,
                 "Importance": np.random.rand()
             })
@@ -158,11 +112,6 @@ def load_feature_importance():
 
 @st.cache_data
 def example_predictions_dataframe():
-    """
-    Genera un DataFrame de ejemplo con y_real, y_pred y error
-    para varios modelos. En la Parte 2 se reemplaza con
-    predicciones reales de testlimpio.csv.
-    """
     rng = np.random.default_rng(42)
     n_points = 150
     rows = []
@@ -191,9 +140,6 @@ def example_predictions_dataframe():
     return df
 
 
-# -----------------------------
-# Sidebar de navegación
-# -----------------------------
 st.sidebar.title("Proyecto 2 - JPX Commodities")
 st.sidebar.markdown("**CC3084 – Data Science**")
 st.sidebar.markdown("---")
@@ -212,13 +158,8 @@ pagina = st.sidebar.radio(
 st.sidebar.markdown("---")
 st.sidebar.markdown("👥 Equipo: Nancy, Brandon, Santiago, Andre")
 
-# Carga global de datasets
 df_train, df_test = load_train_test()
 
-
-# ============================================================
-# PÁGINA: INICIO
-# ============================================================
 if pagina == "Inicio":
     st.title("Dashboard Proyecto 2 – JPX Gold Futures")
 
@@ -253,9 +194,6 @@ if pagina == "Inicio":
         st.success("Archivos trainlimpio.csv y testlimpio.csv detectados correctamente.")
 
 
-# ============================================================
-# PÁGINA 1: PREPROCESAMIENTO DE DATOS
-# ============================================================
 elif pagina == "1. Preprocesamiento de datos":
     st.title("1. Preprocesamiento de datos de entrada")
 
@@ -313,9 +251,6 @@ elif pagina == "1. Preprocesamiento de datos":
             )
 
 
-# ============================================================
-# PÁGINA 2: RESULTADOS DE MODELOS (CARCASA)
-# ============================================================
 elif pagina == "2. Resultados de modelos":
     st.title("2. Resultados de modelos (carcasa)")
 
@@ -372,7 +307,7 @@ elif pagina == "2. Resultados de modelos":
     st.subheader("Tabla de métricas por modelo y target (placeholder)")
 
     st.info(
-        "👉 La Parte 2 debe reemplazar la tabla de ejemplo con las métricas reales "
+        "La Parte 2 debe reemplazar la tabla de ejemplo con las métricas reales "
         "del proyecto (MAE, RMSE, R², MAPE, etc.) para train/valid/test."
     )
 
@@ -389,9 +324,6 @@ elif pagina == "2. Resultados de modelos":
     )
 
 
-# ============================================================
-# PÁGINA 3: SERIES DE TIEMPO POR TARGET
-# ============================================================
 elif pagina == "3. Series de tiempo por target":
     st.title("3. Series de tiempo por target")
 
@@ -410,7 +342,6 @@ elif pagina == "3. Series de tiempo por target":
     else:
         target = st.selectbox("Seleccione el target:", options=TARGETS)
 
-        # Intentar detectar una columna de fecha
         posibles_fechas = [c for c in df_train.columns
                            if "date" in c.lower() or "time" in c.lower()]
         date_col = None
@@ -450,7 +381,7 @@ elif pagina == "3. Series de tiempo por target":
                 st.altair_chart(chart, use_container_width=True)
 
                 st.info(
-                    "👉 En la Parte 2 se puede agregar otra línea de color distinto "
+                    "En la Parte 2 se puede agregar otra línea de color distinto "
                     "para mostrar el valor predicho por cada modelo (ARIMA, GRU, TFT, etc.)."
                 )
             else:
@@ -462,9 +393,6 @@ elif pagina == "3. Series de tiempo por target":
             )
 
 
-# ============================================================
-# PÁGINA 4: VISUALIZACIONES DE EFICIENCIA
-# ============================================================
 elif pagina == "4. Visualizaciones de eficiencia":
     st.title("4. Visualizaciones interactivas de eficiencia")
 
@@ -480,7 +408,6 @@ elif pagina == "4. Visualizaciones de eficiencia":
         """
     )
 
-    # DataFrames de ejemplo (Parte 1). En la Parte 2 se reemplazan con datos reales.
     df_metrics = example_metrics_dataframe()
     df_feat_importance = load_feature_importance()
     df_pred_example = example_predictions_dataframe()
@@ -491,9 +418,6 @@ elif pagina == "4. Visualizaciones de eficiencia":
         "Distribución de errores"
     ])
 
-    # --------------------------------------------------------
-    # TAB 1: Comparativo de métricas por modelo y target
-    # --------------------------------------------------------
     with tab_metrics:
         st.subheader("Comparativo interactivo de métricas por modelo y target")
 
@@ -563,13 +487,10 @@ elif pagina == "4. Visualizaciones de eficiencia":
             st.altair_chart(heatmap, use_container_width=True)
 
             st.caption(
-                "👉 En la Parte 2: reemplazar `example_metrics_dataframe()` "
+                "En la Parte 2: reemplazar `example_metrics_dataframe()` "
                 "con las métricas reales de cada modelo y target."
             )
 
-    # --------------------------------------------------------
-    # TAB 2: Importancia de características
-    # --------------------------------------------------------
     with tab_features:
         st.subheader("Importancia de características por modelo y target")
 
@@ -639,9 +560,6 @@ elif pagina == "4. Visualizaciones de eficiencia":
                     "SHAP, etc."
                 )
 
-    # --------------------------------------------------------
-    # TAB 3: Distribución de errores y predicciones
-    # --------------------------------------------------------
     with tab_errors:
         st.subheader("Predicciones vs valores reales y distribución de errores")
 
@@ -698,7 +616,7 @@ elif pagina == "4. Visualizaciones de eficiencia":
                 st.altair_chart(hist, use_container_width=True)
 
             st.caption(
-                "👉 En la Parte 2, estos gráficos se alimentan con las "
+                "En la Parte 2, estos gráficos se alimentan con las "
                 "predicciones reales por modelo y target, permitiendo ver "
                 "dónde el modelo se equivoca más."
             )
