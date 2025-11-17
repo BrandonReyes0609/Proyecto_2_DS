@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 # =========================================================
 # CONFIG GENERAL
@@ -37,7 +38,7 @@ TARGETS = [
 MODEL_NAMES = ["ARIMA", "Regresión Lineal", "LSTM", "GRU", "TFT"]
 
 # =========================================================
-# 1) PYTORCH MODEL CLASSES
+# 1) CLASES DE MODELOS PYTORCH
 # =========================================================
 class GRUForecaster(nn.Module):
     def __init__(self, input_size, out_dim=1, hidden=512, layers=2):
@@ -83,10 +84,70 @@ class TemporalFusionTransformer(nn.Module):
         out = self.fc(self.dropout(gated[:, -1, :]))
         return out
 
+
+class LSTMRegressor(nn.Module):
+    def __init__(self, input_size, hidden_size=256, num_layers=2, dropout=0.1):
+        super().__init__()
+        self.lstm = nn.LSTM(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0.0
+        )
+        self.fc = nn.Linear(hidden_size, 1)
+        self.out_act = nn.Sigmoid()
+
+    def forward(self, x):
+        out, _ = self.lstm(x)
+        last = out[:, -1, :]
+        yhat = self.fc(last)
+        return self.out_act(yhat)
+
 # =========================================================
-# 2) PATHS FOR SAVED MODELS
+# 2) RUTAS DE MODELOS GUARDADOS (.pth)
 # =========================================================
-# Ajusta las rutas si tus carpetas están en otro directorio.
+
+# ARIMA guardado como diccionario con 'order' y 'train_series'
+ARIMA_MODEL_PATHS = {
+    "JPX_Gold_Standard_Futures_Close": "./modelos/ARIMA/arima_JPX_Gold_Standard_Futures_Close.pth",
+    "JPX_Gold_Standard_Futures_High":  "./modelos/ARIMA/arima_JPX_Gold_Standard_Futures_High.pth",
+    "JPX_Gold_Standard_Futures_Low":   "./modelos/ARIMA/arima_JPX_Gold_Standard_Futures_Low.pth",
+    "JPX_Gold_Standard_Futures_Open":  "./modelos/ARIMA/arima_JPX_Gold_Standard_Futures_Open.pth",
+    "JPX_Gold_Mini_Futures_settlement_price": "./modelos/ARIMA/arima_JPX_Gold_Mini_Futures_settlement_price.pth",
+    "JPX_Gold_Mini_Futures_High": "./modelos/ARIMA/arima_JPX_Gold_Mini_Futures_High.pth",
+    "JPX_Gold_Mini_Futures_Low":  "./modelos/ARIMA/arima_JPX_Gold_Mini_Futures_Low.pth",
+    "JPX_Gold_Mini_Futures_Close":"./modelos/ARIMA/arima_JPX_Gold_Mini_Futures_Close.pth",
+    "JPX_Gold_Mini_Futures_Open": "./modelos/ARIMA/arima_JPX_Gold_Mini_Futures_Open.pth",
+}
+
+# Regresión lineal guardada con torch.save(lr)
+LINEAR_MODEL_PATHS = {
+    "JPX_Gold_Standard_Futures_Close": "./modelos/LINEAR/linear_JPX_Gold_Standard_Futures_Close.pth",
+    "JPX_Gold_Standard_Futures_High":  "./modelos/LINEAR/linear_JPX_Gold_Standard_Futures_High.pth",
+    "JPX_Gold_Standard_Futures_Low":   "./modelos/LINEAR/linear_JPX_Gold_Standard_Futures_Low.pth",
+    "JPX_Gold_Standard_Futures_Open":  "./modelos/LINEAR/linear_JPX_Gold_Standard_Futures_Open.pth",
+    "JPX_Gold_Mini_Futures_settlement_price": "./modelos/LINEAR/linear_JPX_Gold_Mini_Futures_settlement_price.pth",
+    "JPX_Gold_Mini_Futures_High": "./modelos/LINEAR/linear_JPX_Gold_Mini_Futures_High.pth",
+    "JPX_Gold_Mini_Futures_Low":  "./modelos/LINEAR/linear_JPX_Gold_Mini_Futures_Low.pth",
+    "JPX_Gold_Mini_Futures_Close":"./modelos/LINEAR/linear_JPX_Gold_Mini_Futures_Close.pth",
+    "JPX_Gold_Mini_Futures_Open": "./modelos/LINEAR/linear_JPX_Gold_Mini_Futures_Open.pth",
+}
+
+# LSTM: state_dict()
+LSTM_MODEL_PATHS = {
+    "JPX_Gold_Standard_Futures_Close": "./modelos/LSTM/lstm_JPX_Gold_Standard_Futures_Close.pth",
+    "JPX_Gold_Standard_Futures_High":  "./modelos/LSTM/lstm_JPX_Gold_Standard_Futures_High.pth",
+    "JPX_Gold_Standard_Futures_Low":   "./modelos/LSTM/lstm_JPX_Gold_Standard_Futures_Low.pth",
+    "JPX_Gold_Standard_Futures_Open":  "./modelos/LSTM/lstm_JPX_Gold_Standard_Futures_Open.pth",
+    "JPX_Gold_Mini_Futures_settlement_price": "./modelos/LSTM/lstm_JPX_Gold_Mini_Futures_settlement_price.pth",
+    "JPX_Gold_Mini_Futures_High": "./modelos/LSTM/lstm_JPX_Gold_Mini_Futures_High.pth",
+    "JPX_Gold_Mini_Futures_Low":  "./modelos/LSTM/lstm_JPX_Gold_Mini_Futures_Low.pth",
+    "JPX_Gold_Mini_Futures_Close":"./modelos/LSTM/lstm_JPX_Gold_Mini_Futures_Close.pth",
+    "JPX_Gold_Mini_Futures_Open": "./modelos/LSTM/lstm_JPX_Gold_Mini_Futures_Open.pth",
+}
+
+# GRU y TFT ya estaban
 GRU_MODEL_PATHS = {
     "JPX_Gold_Standard_Futures_Close": "./modelos/GRU/gru_JPX_Gold_Standard_Futures_Close.pth",
     "JPX_Gold_Standard_Futures_High":  "./modelos/GRU/gru_JPX_Gold_Standard_Futures_High.pth",
@@ -112,7 +173,7 @@ TFT_MODEL_PATHS = {
 }
 
 # =========================================================
-# 3) HELPERS FOR SEQUENCES & MODEL LOADING
+# 3) HELPERS PARA SECUENCIAS Y CARGA DE MODELOS
 # =========================================================
 def make_sequences(X, y, lookback):
     Xs, ys = [], []
@@ -125,9 +186,9 @@ def make_sequences(X, y, lookback):
 @st.cache_resource
 def load_pytorch_model(model_name: str, target: str, input_size: int):
     """
-    model_name: "GRU" o "TFT"
-    target: uno de TARGETS
-    input_size: número de features por timestep
+    Carga modelos PyTorch desde .pth:
+    - GRU, TFT: state_dict()
+    - LSTM: state_dict()
     """
     if model_name == "GRU":
         path = GRU_MODEL_PATHS[target]
@@ -135,8 +196,11 @@ def load_pytorch_model(model_name: str, target: str, input_size: int):
     elif model_name == "TFT":
         path = TFT_MODEL_PATHS[target]
         model = TemporalFusionTransformer(input_size=input_size).to(DEVICE)
+    elif model_name == "LSTM":
+        path = LSTM_MODEL_PATHS[target]
+        model = LSTMRegressor(input_size=input_size).to(DEVICE)
     else:
-        raise ValueError("Solo se soportan GRU y TFT en esta función.")
+        raise ValueError("Modelo PyTorch no soportado: " + str(model_name))
 
     state_dict = torch.load(path, map_location=DEVICE)
     model.load_state_dict(state_dict)
@@ -181,7 +245,7 @@ def get_sequences_for_target(df_train, df_test, target, date_col="date_id"):
     return Xtr_seq, ytr_seq, Xte_seq, yte_seq, y_scaler
 
 # =========================================================
-# 4) DATA LOADING & PLACEHOLDER DATAFRAMES
+# 4) CARGA DE DATASETS Y PLACEHOLDERS
 # =========================================================
 @st.cache_data
 def load_train_test():
@@ -292,7 +356,7 @@ def example_predictions_dataframe():
     return df
 
 # =========================================================
-# 5) SIDEBAR & PAGE NAVIGATION
+# 5) SIDEBAR & NAVEGACIÓN
 # =========================================================
 st.sidebar.title("Proyecto 2 - JPX Commodities")
 st.sidebar.markdown("**CC3084 – Data Science**")
@@ -315,7 +379,7 @@ st.sidebar.markdown("👥 Equipo: Nancy, Brandon, Santiago, Andre")
 df_train, df_test = load_train_test()
 
 # =========================================================
-# 6) PAGES
+# 6) PÁGINAS
 # =========================================================
 if pagina == "Inicio":
     st.title("Dashboard Proyecto 2 – JPX Gold Futures")
@@ -345,7 +409,7 @@ if pagina == "Inicio":
     if df_train is None or df_test is None:
         st.error(
             "No se encontraron los archivos `trainlimpio.csv` y/o `testlimpio.csv` "
-            "en el directorio actual. Colóquelos junto al `app.py`."
+            "en el directorio actual. Colóquelos junto al `main.py`."
         )
     else:
         st.success("Archivos trainlimpio.csv y testlimpio.csv detectados correctamente.")
@@ -414,8 +478,8 @@ elif pagina == "2. Resultados de modelos":
         Esta sección está pensada para **mostrar y comparar los resultados**
         de los diferentes modelos para cada uno de los targets.
 
-        Ahora, para **GRU** y **TFT** ya se integran los modelos reales
-        guardados en las carpetas `GRU/` y `TFT/`.
+        Ahora, para **ARIMA**, **Regresión Lineal**, **LSTM**, **GRU** y **TFT**
+        se usan los modelos reales guardados en la carpeta `modelos/`.
         """
     )
 
@@ -432,12 +496,11 @@ elif pagina == "2. Resultados de modelos":
             options=MODEL_NAMES
         )
 
-    st.markdown("### Ingreso de datos para predicción (demo)")
+    st.markdown("### Ingreso de datos para predicción (demo / no PyTorch)")
 
     st.info(
-        "En la versión final se podrían pedir lags/indicadores específicos.\n"
-        "Por ahora, estos inputs solo se usan para el modo DEMO de modelos "
-        "que aún no están integrados (ARIMA, Regresión, LSTM)."
+        "Los campos siguientes solo se usan como DEMO en caso de que falten `trainlimpio.csv` "
+        "o `testlimpio.csv`. Con los archivos correctos, la app usa los datos reales."
     )
 
     with st.form(key="form_prediccion_demo"):
@@ -449,49 +512,182 @@ elif pagina == "2. Resultados de modelos":
         submitted = st.form_submit_button("Evaluar modelo")
 
     if submitted:
-        if modelo in ["GRU", "TFT"] and df_train is not None and df_test is not None:
-            # 1) generar secuencias reales para ese target
-            Xtr_seq, ytr_seq, Xte_seq, yte_seq, y_scaler = get_sequences_for_target(
-                df_train, df_test, target, date_col="date_id"
+        if df_train is None or df_test is None:
+            # No hay data real -> DEMO
+            st.warning(
+                "No se encontraron `trainlimpio.csv` y/o `testlimpio.csv`. "
+                "Mostrando resultado DEMO."
+            )
+            pred_demo = feature_1 + feature_2 + feature_3
+            st.metric(
+                label="Predicción DEMO para " + modelo + " (" + target + ")",
+                value=pred_demo
             )
 
-            if len(Xte_seq) == 0:
-                st.error(
-                    "No se pudieron generar secuencias (quizá hay muy pocos datos "
-                    f"para LOOKBACK={LOOKBACK})."
-                )
-            else:
-                # 2) cargar el modelo PyTorch desde el .pth
-                model_pt = load_pytorch_model(
-                    model_name=modelo,
-                    target=target,
-                    input_size=Xtr_seq.shape[-1]
+        else:
+            # Hay data real -> usar modelos y .pth
+            if modelo in ["GRU", "TFT", "LSTM"]:
+                # 1) generar secuencias reales para ese target
+                Xtr_seq, ytr_seq, Xte_seq, yte_seq, y_scaler = get_sequences_for_target(
+                    df_train, df_test, target, date_col="date_id"
                 )
 
-                # 3) hacer predicción sobre TODO el test (para métricas)
-                with torch.no_grad():
-                    xb = torch.tensor(Xte_seq, dtype=torch.float32).to(DEVICE)
-                    yhat_scaled = model_pt(xb).cpu().numpy()
+                if len(Xte_seq) == 0:
+                    st.error(
+                        "No se pudieron generar secuencias (quizá hay muy pocos datos "
+                        "para LOOKBACK=" + str(LOOKBACK) + ")."
+                    )
+                else:
+                    # 2) cargar el modelo PyTorch desde el .pth
+                    model_pt = load_pytorch_model(
+                        model_name=modelo,
+                        target=target,
+                        input_size=Xtr_seq.shape[-1]
+                    )
 
-                yhat = y_scaler.inverse_transform(yhat_scaled)
-                ytrue = y_scaler.inverse_transform(yte_seq)
+                    # 3) predicción sobre TODO el test
+                    with torch.no_grad():
+                        xb = torch.tensor(Xte_seq, dtype=torch.float32).to(DEVICE)
+                        yhat_scaled = model_pt(xb).cpu().numpy()
+
+                    yhat = y_scaler.inverse_transform(yhat_scaled)
+                    ytrue = y_scaler.inverse_transform(yte_seq)
+
+                    mae = mean_absolute_error(ytrue, yhat)
+                    rmse = np.sqrt(mean_squared_error(ytrue, yhat))
+
+                    st.success("Modelo " + modelo + " cargado y evaluado correctamente.")
+                    st.metric("MAE " + modelo + " (" + target + ")", "{:.3f}".format(mae))
+                    st.metric("RMSE " + modelo + " (" + target + ")", "{:.3f}".format(rmse))
+
+                    df_plot = pd.DataFrame({
+                        "idx": np.arange(len(ytrue)),
+                        "Real": ytrue.flatten(),
+                        "Predicho": yhat.flatten()
+                    })
+
+                    df_long = df_plot.melt(
+                        id_vars=["idx"],
+                        value_vars=["Real", "Predicho"],
+                        var_name="Tipo",
+                        value_name="Valor"
+                    )
+
+                    chart = (
+                        alt.Chart(df_long)
+                        .mark_line()
+                        .encode(
+                            x=alt.X("idx:Q", title="Índice (tiempo)"),
+                            y=alt.Y("Valor:Q", title=target),
+                            color=alt.Color("Tipo:N", title="Serie"),
+                            tooltip=["idx", "Tipo", "Valor"]
+                        )
+                        .properties(height=350)
+                    )
+
+                    st.altair_chart(chart, use_container_width=True)
+
+            elif modelo == "Regresión Lineal":
+                # Secuencias y escalado igual que en entrenamiento
+                Xtr_seq, ytr_seq, Xte_seq, yte_seq, y_scaler = get_sequences_for_target(
+                    df_train, df_test, target, date_col="date_id"
+                )
+
+                if len(Xte_seq) == 0:
+                    st.error(
+                        "No se pudieron generar secuencias para Regresión Lineal "
+                        "(LOOKBACK=" + str(LOOKBACK) + ")."
+                    )
+                else:
+                    # Flatten igual que en el notebook de entrenamiento
+                    Xte_flat = Xte_seq.reshape(Xte_seq.shape[0], -1)
+
+                    # Cargar modelo sklearn guardado con torch.save(lr)
+                    path_lr = LINEAR_MODEL_PATHS[target]
+                    lr_model = torch.load(path_lr)
+
+                    yhat_scaled = lr_model.predict(Xte_flat).reshape(-1, 1)
+                    yhat = y_scaler.inverse_transform(yhat_scaled)
+                    ytrue = y_scaler.inverse_transform(yte_seq)
+
+                    mae = mean_absolute_error(ytrue, yhat)
+                    rmse = np.sqrt(mean_squared_error(ytrue, yhat))
+
+                    st.success("Modelo de Regresión Lineal cargado y evaluado.")
+                    st.metric("MAE Regresión (" + target + ")", "{:.3f}".format(mae))
+                    st.metric("RMSE Regresión (" + target + ")", "{:.3f}".format(rmse))
+
+                    df_plot = pd.DataFrame({
+                        "idx": np.arange(len(ytrue)),
+                        "Real": ytrue.flatten(),
+                        "Predicho": yhat.flatten()
+                    })
+
+                    df_long = df_plot.melt(
+                        id_vars=["idx"],
+                        value_vars=["Real", "Predicho"],
+                        var_name="Tipo",
+                        value_name="Valor"
+                    )
+
+                    chart = (
+                        alt.Chart(df_long)
+                        .mark_line()
+                        .encode(
+                            x=alt.X("idx:Q", title="Índice (tiempo)"),
+                            y=alt.Y("Valor:Q", title=target),
+                            color=alt.Color("Tipo:N", title="Serie"),
+                            tooltip=["idx", "Tipo", "Valor"]
+                        )
+                        .properties(height=350)
+                    )
+
+                    st.altair_chart(chart, use_container_width=True)
+
+            elif modelo == "ARIMA":
+                # Cargar config ARIMA desde .pth
+                path_arima = ARIMA_MODEL_PATHS[target]
+                arima_obj = torch.load(path_arima)
+                order = arima_obj.get("order", (2, 1, 2))
+
+                y_train = df_train[target].values.astype(float)
+                y_test = df_test[target].values.astype(float)
+
+                history = list(y_train)
+                preds = []
+
+                for t in range(len(y_test)):
+                    try:
+                        model_arima = SARIMAX(
+                            history,
+                            order=order,
+                            enforce_stationarity=False,
+                            enforce_invertibility=False
+                        ).fit(disp=False)
+                        yhat = model_arima.forecast(steps=1)[0]
+                    except Exception:
+                        yhat = history[-1]
+                    preds.append(yhat)
+                    history.append(y_test[t])
+
+                ytrue = np.array(y_test, dtype=float)
+                yhat = np.array(preds, dtype=float)
 
                 mae = mean_absolute_error(ytrue, yhat)
-                rmse = mean_squared_error(ytrue, yhat)
+                rmse = np.sqrt(mean_squared_error(ytrue, yhat))
 
-                st.success("Modelo cargado y evaluado correctamente.")
-                st.metric(f"MAE {modelo} ({target})", f"{mae:.3f}")
-                st.metric(f"RMSE {modelo} ({target})", f"{rmse:.3f}")
+                st.success(
+                    "Modelo ARIMA cargado (orden " + str(order) + ") y evaluado."
+                )
+                st.metric("MAE ARIMA (" + target + ")", "{:.3f}".format(mae))
+                st.metric("RMSE ARIMA (" + target + ")", "{:.3f}".format(rmse))
 
-                # 4) mostrar una serie Real vs Predicho (Altair line chart)
-                
                 df_plot = pd.DataFrame({
                     "idx": np.arange(len(ytrue)),
-                    "Real": ytrue.flatten(),
-                    "Predicho": yhat.flatten()
+                    "Real": ytrue,
+                    "Predicho": yhat
                 })
 
-                # Pasar de formato ancho (Real/Predicho) a largo (Tipo/Valor)
                 df_long = df_plot.melt(
                     id_vars=["idx"],
                     value_vars=["Real", "Predicho"],
@@ -512,19 +708,6 @@ elif pagina == "2. Resultados de modelos":
                 )
 
                 st.altair_chart(chart, use_container_width=True)
-
-
-        else:
-            # Modo demo para modelos aún no integrados
-            st.warning(
-                "Por ahora solo está integrado el flujo real para **GRU** y **TFT**.\n"
-                "El resto de modelos sigue en modo DEMO."
-            )
-            pred_demo = feature_1 + feature_2 + feature_3
-            st.metric(
-                label="Predicción DEMO para " + modelo + " (" + target + ")",
-                value=pred_demo
-            )
 
     st.markdown("---")
     st.subheader("Tabla de métricas por modelo y target (placeholder)")
@@ -670,7 +853,7 @@ elif pagina == "4. Visualizaciones de eficiencia":
                 .mark_bar()
                 .encode(
                     x=alt.X("Modelo:N", title="Modelo", sort=MODEL_NAMES),
-                    y=alt.Y(f"{metric}:Q", title=metric),
+                    y=alt.Y(metric + ":Q", title=metric),
                     color="Modelo:N",
                     column=alt.Column("Target:N", title="Target"),
                     tooltip=["Modelo", "Target", "MAE", "RMSE"]
@@ -687,7 +870,7 @@ elif pagina == "4. Visualizaciones de eficiencia":
                 .encode(
                     x=alt.X("Modelo:N", sort=MODEL_NAMES),
                     y=alt.Y("Target:N", sort=TARGETS),
-                    color=alt.Color(f"{metric}:Q", title=metric),
+                    color=alt.Color(metric + ":Q", title=metric),
                     tooltip=["Modelo", "Target", "MAE", "RMSE"]
                 )
                 .properties(height=300)
