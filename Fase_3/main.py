@@ -98,18 +98,97 @@ def preprocess_data(df, date_col=None):
 def example_metrics_dataframe():
     """
     DataFrame de EJEMPLO para las métricas de modelos.
-    La Parte 2 debe reemplazar esta función con las métricas reales
-    del proyecto (MAE, RMSE, R2, etc.).
+    Ahora incluye TODOS los targets para poder filtrar y comparar.
+    En la Parte 2 se reemplaza por métricas reales.
     """
-    data = {
-        "Modelo": MODEL_NAMES,
-        "Target": [
-            "Close Std", "Close Std", "Close Std", "Close Std", "Close Std"
-        ],
-        "MAE": [132, 7000, 9000, 110, 120],
-        "RMSE": [262, 7500, 9500, 200, 250]
+    base_mae = {
+        "ARIMA": 130,
+        "Regresión Lineal": 180,
+        "LSTM": 150,
+        "GRU": 140,
+        "TFT": 120
     }
-    return pd.DataFrame(data)
+    base_rmse = {
+        "ARIMA": 250,
+        "Regresión Lineal": 320,
+        "LSTM": 280,
+        "GRU": 260,
+        "TFT": 220
+    }
+
+    rows = []
+    for i, target in enumerate(TARGETS):
+        for modelo in MODEL_NAMES:
+            rows.append({
+                "Modelo": modelo,
+                "Target": target,
+                "MAE": base_mae[modelo] + i * 5,   # solo para variar un poco
+                "RMSE": base_rmse[modelo] + i * 8  # placeholder
+            })
+    return pd.DataFrame(rows)
+
+@st.cache_data
+def load_feature_importance():
+    """
+    Intenta cargar feature_importance.csv con columnas:
+      Modelo, Target, Feature, Importance
+    Si no existe, genera un ejemplo para la demo.
+    """
+    if os.path.exists("feature_importance.csv"):
+        df = pd.read_csv("feature_importance.csv")
+        return df
+
+    # EJEMPLO (Parte 1): importancia ficticia
+    features_demo = [
+        "lag_1", "lag_2", "lag_7",
+        "rolling_mean_7", "rolling_std_7",
+        "volume", "open_interest"
+    ]
+    rows = []
+    for modelo in ["Regresión Lineal", "LSTM", "GRU", "TFT"]:
+        for feat in features_demo:
+            rows.append({
+                "Modelo": modelo,
+                "Target": TARGETS[0],   # solo un target de ejemplo
+                "Feature": feat,
+                "Importance": np.random.rand()
+            })
+    return pd.DataFrame(rows)
+
+
+@st.cache_data
+def example_predictions_dataframe():
+    """
+    Genera un DataFrame de ejemplo con y_real, y_pred y error
+    para varios modelos. En la Parte 2 se reemplaza con
+    predicciones reales de testlimpio.csv.
+    """
+    rng = np.random.default_rng(42)
+    n_points = 150
+    rows = []
+
+    modelos_ruido = {
+        "ARIMA": 70,
+        "Regresión Lineal": 80,
+        "LSTM": 60,
+        "GRU": 55,
+        "TFT": 50
+    }
+
+    for modelo, sigma in modelos_ruido.items():
+        y_real = np.linspace(1000, 2000, n_points)
+        ruido = rng.normal(0, sigma, size=n_points)
+        y_pred = y_real + ruido
+        for i in range(n_points):
+            rows.append({
+                "Modelo": modelo,
+                "y_real": float(y_real[i]),
+                "y_pred": float(y_pred[i])
+            })
+
+    df = pd.DataFrame(rows)
+    df["error"] = df["y_real"] - df["y_pred"]
+    return df
 
 
 # -----------------------------
@@ -391,76 +470,256 @@ elif pagina == "4. Visualizaciones de eficiencia":
 
     st.markdown(
         """
-        Esta sección está dedicada a comparar el rendimiento de los modelos.
+        Esta sección cumple con el **Punto 3: Visualizaciones Interactivas** de la rúbrica.
 
-        Por ahora usa métricas de **ejemplo**, pero la estructura está lista para:
-        - Comparar **ARIMA vs GRU vs TFT** y otros modelos.
-        - Ver diferencias de MAE y RMSE por target.
+        - Permite una **exploración profunda** del desempeño de los modelos.
+        - Incluye:
+          1. Gráficos comparativos de rendimiento por modelo y target.
+          2. Gráficos de **importancia de características**.
+          3. Visualizaciones de **predicciones vs valores reales** y distribución de errores.
         """
     )
 
-    df_metrics = example_metrics_dataframe()  # Placeholder
+    # DataFrames de ejemplo (Parte 1). En la Parte 2 se reemplazan con datos reales.
+    df_metrics = example_metrics_dataframe()
+    df_feat_importance = load_feature_importance()
+    df_pred_example = example_predictions_dataframe()
 
-    st.subheader("MAE por modelo (ejemplo)")
+    tab_metrics, tab_features, tab_errors = st.tabs([
+        "Comparativo de rendimiento",
+        "Importancia de características",
+        "Distribución de errores"
+    ])
 
-    chart_mae = (
-        alt.Chart(df_metrics)
-        .mark_bar()
-        .encode(
-            x=alt.X("Modelo:N", title="Modelo"),
-            y=alt.Y("MAE:Q", title="MAE"),
-            color="Modelo:N",
-            tooltip=["Modelo", "Target", "MAE", "RMSE"]
-        )
-        .properties(height=350)
-    )
+    # --------------------------------------------------------
+    # TAB 1: Comparativo de métricas por modelo y target
+    # --------------------------------------------------------
+    with tab_metrics:
+        st.subheader("Comparativo interactivo de métricas por modelo y target")
 
-    st.altair_chart(chart_mae, use_container_width=True)
+        with st.expander("Filtros", expanded=True):
+            selected_targets = st.multiselect(
+                "Targets a visualizar:",
+                options=TARGETS,
+                default=[TARGETS[0]]
+            )
+            if not selected_targets:
+                selected_targets = TARGETS
 
-    st.subheader("RMSE por modelo (ejemplo)")
+            selected_models = st.multiselect(
+                "Modelos a comparar:",
+                options=MODEL_NAMES,
+                default=MODEL_NAMES
+            )
+            if not selected_models:
+                selected_models = MODEL_NAMES
 
-    chart_rmse = (
-        alt.Chart(df_metrics)
-        .mark_bar()
-        .encode(
-            x=alt.X("Modelo:N", title="Modelo"),
-            y=alt.Y("RMSE:Q", title="RMSE"),
-            color="Modelo:N",
-            tooltip=["Modelo", "Target", "MAE", "RMSE"]
-        )
-        .properties(height=350)
-    )
+            metric = st.radio(
+                "Métrica a visualizar:",
+                options=["MAE", "RMSE"],
+                horizontal=True
+            )
 
-    st.altair_chart(chart_rmse, use_container_width=True)
+        df_filt = df_metrics[
+            df_metrics["Target"].isin(selected_targets)
+            & df_metrics["Modelo"].isin(selected_models)
+        ]
+
+        if df_filt.empty:
+            st.warning("No hay datos para la combinación de filtros seleccionada.")
+        else:
+            st.markdown("#### Barras comparativas por target")
+            chart_bar = (
+                alt.Chart(df_filt)
+                .mark_bar()
+                .encode(
+                    x=alt.X("Modelo:N", title="Modelo", sort=MODEL_NAMES),
+                    y=alt.Y(f"{metric}:Q", title=metric),
+                    color="Modelo:N",
+                    column=alt.Column("Target:N", title="Target"),
+                    tooltip=["Modelo", "Target", "MAE", "RMSE"]
+                )
+                .properties(height=300)
+                .interactive()
+            )
+            st.altair_chart(chart_bar, use_container_width=True)
+
+            st.markdown("#### Mapa de calor de desempeño (modelo vs target)")
+            heatmap = (
+                alt.Chart(df_filt)
+                .mark_rect()
+                .encode(
+                    x=alt.X("Modelo:N", sort=MODEL_NAMES),
+                    y=alt.Y("Target:N", sort=TARGETS),
+                    color=alt.Color(
+                        f"{metric}:Q",
+                        title=metric
+                    ),
+                    tooltip=["Modelo", "Target", "MAE", "RMSE"]
+                )
+                .properties(height=300)
+                .interactive()
+            )
+            st.altair_chart(heatmap, use_container_width=True)
+
+            st.caption(
+                "👉 En la Parte 2: reemplazar `example_metrics_dataframe()` "
+                "con las métricas reales de cada modelo y target."
+            )
+
+    # --------------------------------------------------------
+    # TAB 2: Importancia de características
+    # --------------------------------------------------------
+    with tab_features:
+        st.subheader("Importancia de características por modelo y target")
+
+        if df_feat_importance is None or df_feat_importance.empty:
+            st.info(
+                "No se encontró información de importancia de características. "
+                "En la Parte 2 se debe generar un archivo `feature_importance.csv` "
+                "con las columnas: Modelo, Target, Feature, Importance."
+            )
+        else:
+            col_f1, col_f2, col_f3 = st.columns(3)
+            with col_f1:
+                modelo_f = st.selectbox(
+                    "Modelo:",
+                    options=sorted(df_feat_importance["Modelo"].unique())
+                )
+            with col_f2:
+                target_f = st.selectbox(
+                    "Target:",
+                    options=sorted(df_feat_importance["Target"].unique())
+                )
+
+            df_sel = df_feat_importance[
+                (df_feat_importance["Modelo"] == modelo_f)
+                & (df_feat_importance["Target"] == target_f)
+            ]
+
+            if df_sel.empty:
+                st.warning(
+                    "No hay datos de importancia para esa combinación "
+                    "(modelo, target)."
+                )
+            else:
+                with col_f3:
+                    max_k = min(20, len(df_sel))
+                    top_k = st.slider(
+                        "Número de características a mostrar:",
+                        min_value=3,
+                        max_value=max_k,
+                        value=min(10, max_k)
+                    )
+
+                df_top = df_sel.sort_values(
+                    "Importance", ascending=False
+                ).head(top_k)
+
+                chart_feat = (
+                    alt.Chart(df_top)
+                    .mark_bar()
+                    .encode(
+                        x=alt.X("Importance:Q", title="Importancia relativa"),
+                        y=alt.Y(
+                            "Feature:N",
+                            sort="-x",
+                            title="Característica"
+                        ),
+                        tooltip=["Feature", "Importance"]
+                    )
+                    .properties(height=25 * len(df_top))
+                    .interactive()
+                )
+                st.altair_chart(chart_feat, use_container_width=True)
+
+                st.caption(
+                    "👉 En la Parte 2, estos valores deben provenir de métodos "
+                    "como coeficientes de regresión, importancia de árboles, "
+                    "SHAP, etc."
+                )
+
+    # --------------------------------------------------------
+    # TAB 3: Distribución de errores y predicciones
+    # --------------------------------------------------------
+    with tab_errors:
+        st.subheader("Predicciones vs valores reales y distribución de errores")
+
+        if df_pred_example is None or df_pred_example.empty:
+            st.info(
+                "No hay predicciones de ejemplo. En la Parte 2 se deben "
+                "generar predicciones reales para testlimpio.csv y "
+                "alimentar aquí la función `example_predictions_dataframe()`."
+            )
+        else:
+            modelo_sel = st.selectbox(
+                "Modelo a visualizar:",
+                options=df_pred_example["Modelo"].unique()
+            )
+
+            df_model = df_pred_example[
+                df_pred_example["Modelo"] == modelo_sel
+            ]
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**Dispersión y_real vs y_pred**")
+                scatter = (
+                    alt.Chart(df_model)
+                    .mark_circle(size=40)
+                    .encode(
+                        x=alt.X("y_real:Q", title="Valor real"),
+                        y=alt.Y("y_pred:Q", title="Valor predicho"),
+                        tooltip=["y_real", "y_pred", "error"]
+                    )
+                    .properties(height=350)
+                    .interactive()
+                )
+                st.altair_chart(scatter, use_container_width=True)
+
+            with col2:
+                st.markdown("**Histograma de errores (y_real - y_pred)**")
+                hist = (
+                    alt.Chart(df_model)
+                    .mark_bar()
+                    .encode(
+                        x=alt.X(
+                            "error:Q",
+                            bin=alt.Bin(maxbins=30),
+                            title="Error"
+                        ),
+                        y=alt.Y("count():Q", title="Frecuencia"),
+                        tooltip=[alt.Tooltip("count():Q", title="N")]
+                    )
+                    .properties(height=350)
+                    .interactive()
+                )
+                st.altair_chart(hist, use_container_width=True)
+
+            st.caption(
+                "👉 En la Parte 2, estos gráficos se alimentan con las "
+                "predicciones reales por modelo y target, permitiendo ver "
+                "dónde el modelo se equivoca más."
+            )
 
     st.markdown("---")
     st.subheader("Notas para la Parte 2 – Integración de Modelos")
 
     st.markdown(
         """
-        Para completar la rúbrica de **Integración de Modelos en la Aplicación (20%)**,
-        la siguiente persona debe:
+        Para completar la parte de **Integración de Modelos y Resultados**:
 
-        1. **Conectar los modelos reales**  
-           - Cargar archivos de modelos entrenados (`.pkl`, `.pt`, etc.) para:
-             - ARIMA  
-             - Regresión Lineal  
-             - LSTM  
-             - GRU  
-             - TFT  
+        1. Reemplazar las funciones de ejemplo:
+           - `example_metrics_dataframe()` → métricas reales por modelo/target.
+           - `load_feature_importance()` → valores reales de importancia.
+           - `example_predictions_dataframe()` → `y_real`, `y_pred` y `error` reales.
 
-        2. **Llenar las métricas con los resultados del Proyecto**  
-           - Reemplazar `example_metrics_dataframe()` por un DataFrame construido
-             con los resultados reales de cada modelo y cada target
-             (MAE, RMSE, R², MAPE, etc.).
+        2. Exportar estas tablas desde sus notebooks / scripts de entrenamiento
+           y guardarlas como `.csv` para que la app las consuma.
 
-        3. **Agregar gráficas específicas: ARIMA vs GRU vs TFT, etc.**  
-           - Comparar modelos por target, por ejemplo:
-             - Gráfico de barras MAE por modelo para `JPX_Gold_Standard_Futures_Close`.
-             - Series de tiempo real vs. predicho para cada modelo.
-             - Scatter `y_real` vs. `y_pred` con línea y = x.
-
-        Con estas modificaciones, la app cubrirá tanto la **Parte 1**
-        (diseño y desarrollo) como la **Parte 2** (integración de modelos).
+        3. Revisar que los nombres de modelos y targets coincidan con los usados
+           en esta app para que los filtros funcionen sin cambios.
         """
     )
+
