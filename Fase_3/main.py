@@ -368,7 +368,6 @@ pagina = st.sidebar.radio(
         "Inicio",
         "1. Preprocesamiento de datos",
         "2. Resultados de modelos",
-        "3. Series de tiempo por target",
         "4. Visualizaciones de eficiencia"
     ]
 )
@@ -384,27 +383,23 @@ df_train, df_test = load_train_test()
 if pagina == "Inicio":
     st.title("Dashboard Proyecto 2 – JPX Gold Futures")
 
-    st.markdown(
-        """
-        Esta aplicación corresponde a la **Parte 1: Diseño y Desarrollo de la Aplicación**  
-        del Proyecto 2 de **Data Science**.
+    st.markdown("""
+    # Commodity Price Forecasting Dashboard
+    ### Proyecto 2 — Resultados Parciales y Visualizaciones
 
-        ### Objetivos de esta carcasa
+    Esta aplicación presenta los avances del Proyecto 2 relacionados con la predicción de precios de commodities, utilizando como caso de estudio los contratos de oro del conjunto de datos de la competencia MITSUI&CO. Commodity Prediction Challenge (Kaggle).
 
-        - Mostrar de forma clara el flujo de:
-          - Carga y preprocesamiento de datos (`trainlimpio.csv`, `testlimpio.csv`).
-          - Exploración de series de tiempo por *target*.
-          - Presentación de resultados de modelos.
-          - Visualizaciones comparativas de eficiencia.
+    El objetivo de este panel es proporcionar una interfaz clara y organizada para analizar los resultados obtenidos mediante distintos modelos de predicción aplicados a series temporales financieras. A través del menú lateral, el usuario puede acceder a:
 
-        - Dejar listos los espacios para la **Parte 2 (Integración de Modelos)**:
-          - Conectar los modelos reales (cargar archivos `.pkl`, `.pt`, etc.).
-          - Llenar las métricas con los resultados reales del proyecto.
-          - Agregar gráficas específicas: **ARIMA vs GRU vs TFT**, por cada target.
+    - Visualización de series históricas y comportamiento temporal.
+    - Resultados de modelos estadísticos y de aprendizaje automático (ARIMA, Regresión Lineal, LSTM, GRU, TFT).
+    - Comparación de predicciones frente a valores reales.
+    - Métricas de desempeño como MAE, RMSE y R².
+    - Gráficos y análisis de residuales para diagnóstico del modelo.
 
-        Use el menú de la izquierda para navegar entre secciones.
-        """
-    )
+    Este dashboard permite una exploración estructurada del proceso de modelado y evaluación, facilitando la interpretación de resultados y la comparación entre diferentes enfoques predictivos.
+    """)
+
 
     if df_train is None or df_test is None:
         st.error(
@@ -720,72 +715,6 @@ elif pagina == "2. Resultados de modelos":
     df_metrics_demo = example_metrics_dataframe()
     st.dataframe(df_metrics_demo)
 
-elif pagina == "3. Series de tiempo por target":
-    st.title("3. Series de tiempo por target")
-
-    st.markdown(
-        """
-        Aquí se pueden visualizar las **series de tiempo reales** para cada target
-        utilizando `trainlimpio.csv` y `testlimpio.csv`.
-
-        Más adelante, se puede superponer la serie **predicha** por cada modelo.
-        """
-    )
-
-    if df_train is None or df_test is None:
-        st.error("No se pudieron cargar los archivos limpios.")
-    else:
-        target = st.selectbox("Seleccione el target:", options=TARGETS)
-
-        posibles_fechas = [c for c in df_train.columns
-                           if "date" in c.lower() or "time" in c.lower()]
-        date_col = None
-        if len(posibles_fechas) > 0:
-            date_col = posibles_fechas[0]
-
-        if date_col is not None:
-            df_train_plot = df_train.copy()
-            df_test_plot = df_test.copy()
-            df_train_plot[date_col] = pd.to_datetime(
-                df_train_plot[date_col], errors="coerce"
-            )
-            df_test_plot[date_col] = pd.to_datetime(
-                df_test_plot[date_col], errors="coerce"
-            )
-
-            df_train_plot["Conjunto"] = "Train"
-            df_test_plot["Conjunto"] = "Test"
-
-            df_all = pd.concat([df_train_plot, df_test_plot], ignore_index=True)
-
-            if target in df_all.columns:
-                st.subheader("Serie de tiempo real: " + target)
-
-                chart = (
-                    alt.Chart(df_all)
-                    .mark_line()
-                    .encode(
-                        x=alt.X(date_col + ":T", title="Fecha"),
-                        y=alt.Y(target + ":Q", title=target),
-                        color="Conjunto:N",
-                        tooltip=[date_col, target, "Conjunto"]
-                    )
-                    .properties(height=400)
-                )
-
-                st.altair_chart(chart, use_container_width=True)
-
-                st.info(
-                    "En la Parte 2 se puede agregar otra línea de color distinto "
-                    "para mostrar el valor predicho por cada modelo (ARIMA, GRU, TFT, etc.)."
-                )
-            else:
-                st.error("El target seleccionado no existe como columna numérica.")
-        else:
-            st.warning(
-                "No se detectó automáticamente una columna de fecha. "
-                "Si los datos tienen una, puede agregarse su manejo en el código."
-            )
 
 elif pagina == "4. Visualizaciones de eficiencia":
     st.title("4. Visualizaciones interactivas de eficiencia")
@@ -1016,21 +945,4 @@ elif pagina == "4. Visualizaciones de eficiencia":
             )
 
     st.markdown("---")
-    st.subheader("Notas para la Parte 2 – Integración de Modelos")
-
-    st.markdown(
-        """
-        Para completar la parte de **Integración de Modelos y Resultados**:
-
-        1. Reemplazar las funciones de ejemplo:
-           - `example_metrics_dataframe()` → métricas reales por modelo/target.
-           - `load_feature_importance()` → valores reales de importancia.
-           - `example_predictions_dataframe()` → `y_real`, `y_pred` y `error` reales.
-
-        2. Exportar estas tablas desde sus notebooks / scripts de entrenamiento
-           y guardarlas como `.csv` para que la app las consuma.
-
-        3. Revisar que los nombres de modelos y targets coincidan con los usados
-           en esta app para que los filtros funcionen sin cambios.
-        """
-    )
+    
